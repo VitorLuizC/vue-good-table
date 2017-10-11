@@ -106,466 +106,466 @@
 
 <script>
 import {format, parse, compareAsc} from 'date-fns/esm'
-  export default {
-    name: 'vue-good-table',
-    props: {
-      styleClass: {default: 'table table-bordered'},
-      title: '',
-      columns: {},
-      rows: {},
-      onClick: {},
-      perPage: {},
-      sortable: {default: true},
-      paginate: {default: false},
-      lineNumbers: {default: false},
-      defaultSortBy: {default: null},
-      responsive: {default: true},
-      rtl: {default: false},
 
-      // search
-      globalSearch: {default: false},
-      searchTrigger: {default: null},
-      externalSearchQuery: {default: null},
+export default {
+  name: 'vue-good-table',
+  props: {
+    styleClass: {default: 'table table-bordered'},
+    title: '',
+    columns: {},
+    rows: {},
+    onClick: {},
+    perPage: {},
+    sortable: {default: true},
+    paginate: {default: false},
+    lineNumbers: {default: false},
+    defaultSortBy: {default: null},
+    responsive: {default: true},
+    rtl: {default: false},
 
-      // text options
-      globalSearchPlaceholder: {default: 'Search Table'},
-      nextText: {default: 'Next'},
-      prevText: {default: 'Prev'},
-      rowsPerPageText: {default: 'Rows per page:'},
-      ofText: {default: 'of'},
-      allText: {default: 'All'},
+    // search
+    globalSearch: {default: false},
+    searchTrigger: {default: null},
+    externalSearchQuery: {default: null},
+
+    // text options
+    globalSearchPlaceholder: {default: 'Search Table'},
+    nextText: {default: 'Next'},
+    prevText: {default: 'Prev'},
+    rowsPerPageText: {default: 'Rows per page:'},
+    ofText: {default: 'of'},
+    allText: {default: 'All'}
+  },
+
+  data: () => ({
+    currentPage: 1,
+    currentPerPage: 10,
+    sortColumn: -1,
+    sortType: 'asc',
+    globalSearchTerm: '',
+    columnFilters: {},
+    filteredRows: [],
+    timer: null,
+    forceSearch: false,
+    sortChanged: false
+  }),
+
+  methods: {
+    nextPage () {
+      if (this.currentPerPage === -1) return
+      if (this.processedRows.length > this.currentPerPage * this.currentPage) {
+        ++this.currentPage
+      }
+      this.pageChanged()
     },
 
-    data: () => ({
-      currentPage: 1,
-      currentPerPage: 10,
-      sortColumn: -1,
-      sortType: 'asc',
-      globalSearchTerm: '',
-      columnFilters: {},
-      filteredRows: [],
-      timer: null,
-      forceSearch: false,
-      sortChanged: false,
-    }),
+    previousPage () {
+      if (this.currentPage > 1) {
+        --this.currentPage
+      }
+      this.pageChanged()
+    },
 
-    methods: {
-      nextPage() {
-        if(this.currentPerPage == -1) return;
-        if (this.processedRows.length > this.currentPerPage * this.currentPage)
-          ++this.currentPage;
-        this.pageChanged();
-      },
+    pageChanged () {
+      this.$emit('pageChanged', {currentPage: this.currentPage, total: Math.floor(this.rows.length / this.currentPerPage)})
+    },
 
-      previousPage() {
+    onTableLength (e) {
+      this.currentPerPage = e.target.value
+    },
 
-        if (this.currentPage > 1)
-          --this.currentPage;
-        this.pageChanged();
-      },
+    sort (index) {
+      if (!this.sortable) {
+        return
+      }
+      if (this.sortColumn === index) {
+        this.sortType = this.sortType === 'asc' ? 'desc' : 'asc'
+      } else {
+        this.sortType = 'asc'
+        this.sortColumn = index
+      }
+      this.sortChanged = true
+    },
 
-      pageChanged() {
-        this.$emit('pageChanged', {currentPage: this.currentPage, total: Math.floor(this.rows.length / this.currentPerPage)});
-      },
+    click (row, index) {
+      if (this.onClick) {
+        this.onClick(row, index)
+      }
+    },
 
-      onTableLength(e) {
-        this.currentPerPage = e.target.value;
-      },
+    searchTable () {
+      if (this.searchTrigger === 'enter') {
+        this.forceSearch = true
+        this.sortChanged = true
+      }
+    },
 
-      sort(index) {
-        if (!this.sortable)
-          return;
-        if (this.sortColumn === index) {
-          this.sortType = this.sortType === 'asc' ? 'desc' : 'asc';
-        } else {
-          this.sortType = 'asc';
-          this.sortColumn = index;
-        }
-        this.sortChanged = true;
-      },
-
-      click(row, index) {
-        if (this.onClick)
-          this.onClick(row, index);
-      },
-
-      searchTable() {
-        if(this.searchTrigger == 'enter') {
-          this.forceSearch = true;
-          this.sortChanged = true;
-        }
-      },
-
-      // field can be:
-      // 1. function
-      // 2. regular property - ex: 'prop'
-      // 3. nested property path - ex: 'nested.prop'
-      collect(obj, field) {
-
-        //utility function to get nested property
-        function dig(obj, selector) {
-          var result = obj;
-          const splitter = selector.split('.');
-          for (let i = 0; i < splitter.length; i++)
-            if (typeof(result) === 'undefined')
-              return undefined;
-            else
-              result = result[splitter[i]];
-          return result;
-        }
-
-        if (typeof(field) === 'function')
-          return field(obj);
-        else if (typeof(field) === 'string')
-          return dig(obj, field);
-        else
-          return undefined;
-      },
-
-      collectFormatted(obj, column) {
-        //helper functions within collect
-        function formatDecimal(v) {
-          return parseFloat(Math.round(v * 100) / 100).toFixed(2);
-        }
-
-        function formatPercent(v) {
-          return parseFloat(v * 100).toFixed(2) + '%';
-        }
-
-        function formatDate(v) {
-          // convert to date
-          return format(parse(v, column.inputFormat, new Date()), column.outputFormat);
-        }
-
-        var value = this.collect(obj, column.field);
-
-        if (value === undefined) return '';
-        //lets format the resultant data
-        switch(column.type) {
-          case 'decimal':
-            return formatDecimal(value);
-          case 'percentage':
-            return formatPercent(value);
-          case 'date':
-            return formatDate(value);
-          default:
-            return value;
-        }
-      },
-
-      formattedRow(row) {
-        var formattedRow = {};
-        for (const col of this.columns) {
-          if (col.field) {
-            formattedRow[col.field] = this.collectFormatted(row, col);
-          }
-        }
-        return formattedRow;
-      },
-
-      // Get the necessary style-classes for the given column
-      //--------------------------------------------------------
-      columnHeaderClass(column, index){
-        var classString = '';
-        if (this.sortable) {
-          classString += 'sorting ';
-        }
-        if (index === this.sortColumn) {
-          if (this.sortType === 'desc') {
-            classString += 'sorting-desc ';
+    // field can be:
+    // 1. function
+    // 2. regular property - ex: 'prop'
+    // 3. nested property path - ex: 'nested.prop'
+    collect (obj, field) {
+      // utility function to get nested property
+      function dig (obj, selector) {
+        var result = obj
+        const splitter = selector.split('.')
+        for (let i = 0; i < splitter.length; i++) {
+          if (typeof result === 'undefined') {
+            return undefined
           } else {
-            classString += 'sorting-asc ';
+            result = result[splitter[i]]
           }
         }
-        classString += this.getDataStyle(index, 'th');
-        return classString;
-      },
-      // given column index, we can figure out what style classes
-      // to apply to this data
-      //---------------------------------------------------------
-      getDataStyle(index, type) {
-        var classString = '';
-        switch (this.columns[index].type) {
-          case 'number':
-          case 'percentage':
-          case 'decimal':
-          case 'date':
-          case 'text':
-            classString += 'right-align ';
-          break;
-          default:
-            classString += 'left-align ';
-            break;
-        }
-        if (typeof type !== 'undefined' && this.columns[index].hasOwnProperty(type + 'Class')) {
-          classString += ' ';
-          classString = this.columns[index][type + 'Class'];
-        }
-        return classString;
-      },
-
-      //since vue doesn't detect property addition and deletion, we
-      // need to create helper function to set property etc
-      updateFilters(column, value) {
-        const _this = this;
-        if (this.timer) clearTimeout(this.timer);
-        this.timer = setTimeout(function(){
-          _this.$set(_this.columnFilters, column.field, value)
-        }, 400);
-
-      },
-
-      //method to filter rows
-      filterRows() {
-        var computedRows = JSON.parse(JSON.stringify(this.rows));
-        if(this.hasFilterRow) {
-          for (var col of this.columns){
-            if (col.filterable && this.columnFilters[col.field]) {
-              computedRows = computedRows.filter(row => {
-
-                // If column has a custom filter, use that.
-
-                if (col.filter) {
-                    return col.filter(this.collect(row, col.field), this.columnFilters[col.field])
-                }
-
-                // Use default filters
-
-                switch(col.type) {
-                  case 'number':
-                  case 'percentage':
-                  case 'decimal':
-                    //in case of numeric value we need to do an exact
-                    //match for now`
-                    return this.collect(row, col.field) == this.columnFilters[col.field];
-                  default:
-                    //text value lets test starts with
-                    return this.collect(row, col.field)
-                      .toLowerCase()
-                      .startsWith(
-                        (this.columnFilters[col.field]).toLowerCase()
-                      );
-                }
-              });
-            }
-          }
-        }
-        this.filteredRows = computedRows;
-      },
-
-      //get column's defined placeholder or default one
-      getPlaceholder(column) {
-        const placeholder = column.placeholder || 'Filter ' + column.label
-        return placeholder
-      },
-
-      getCurrentIndex(index) {
-        return (this.currentPage - 1) * this.currentPerPage + index + 1;
-      },
-    },
-
-    watch: {
-      columnFilters: {
-          handler: function(newObj){
-            this.filterRows();
-          },
-          deep: true,
-      },
-      rows: {
-        handler: function(newObj){
-          this.filterRows();
-        },
-        deep: true,
-      },
-      perPage() {
-        if (this.perPage) {
-          this.currentPerPage = this.perPage;
-        }else{
-          //reset to default
-          this.currentPerPage = 10;
-        }
+        return result
       }
 
+      if (typeof field === 'function') {
+        return field(obj)
+      } else if (typeof field === 'string') {
+        return dig(obj, field)
+      } else {
+        return undefined
+      }
     },
 
-    computed: {
-
-      searchTerm(){
-        return (this.externalSearchQuery != null) ? this.externalSearchQuery : this.globalSearchTerm;
-      },
-
-      //
-      globalSearchAllowed() {
-        if (this.globalSearch
-          && !!this.globalSearchTerm
-          && this.searchTrigger != 'enter'){
-          return true;
-        }
-
-        if (this.externalSearchQuery != null
-           && this.searchTrigger != 'enter'){
-          return true;
-        }
-
-        if (this.forceSearch){
-          this.forceSearch = false;
-          return true;
-        }
-
-        return false;
-      },
-
-      // to create a filter row, we need to
-      // make sure that there is atleast 1 column
-      // that requires filtering
-      hasFilterRow(){
-        if (!this.globalSearch) {
-          for(var col of this.columns){
-            if(col.filterable){
-              return true;
-            }
-          }
-        }
-        return false;
-      },
-
-      // this is done everytime sortColumn
-      // or sort type changes
-      //----------------------------------------
-      processedRows() {
-       var computedRows = this.filteredRows;
-
-        // take care of the global filter here also
-        if (this.globalSearchAllowed) {
-          var filteredRows = [];
-          for (var row of this.rows) {
-            for(var col of this.columns) {
-              if (String(this.collectFormatted(row, col)).toLowerCase()
-                  .search(this.searchTerm.toLowerCase()) > -1) {
-                filteredRows.push(row);
-                break;
-              }
-            }
-          }
-          computedRows = filteredRows;
-        }
-
-        //taking care of sort here only if sort has changed
-        if (this.sortable !== false && this.sortColumn !== -1 &&
-
-          // if search trigger is enter then we only sort
-          // when enter is hit
-          (this.searchTrigger != 'enter' || this.sortChanged)) {
-
-          this.sortChanged = false;
-
-          computedRows = computedRows.sort((x,y) => {
-            if (!this.columns[this.sortColumn])
-              return 0;
-
-            const cook = (d) => {
-              d = this.collect(d, this.columns[this.sortColumn].field);
-
-              //take care of dates too.
-              if (this.columns[this.sortColumn].type === 'date') {
-                d = parse(d + '', this.columns[this.sortColumn].inputFormat, new Date());
-              } else if (typeof(d) === 'string') {
-                d = d.toLowerCase();
-                if (this.columns[this.sortColumn].type == 'number')
-                  d = d.indexOf('.') >= 0 ? parseFloat(d) : parseInt(d);
-              }
-              return d;
-            }
-
-            x = cook(x);
-            y = cook(y);
-
-            // date comparison here
-            if (this.columns[this.sortColumn].type === 'date') {
-              return (compareAsc(x, y)) * (this.sortType === 'desc' ? -1 : 1);
-            }
-
-            // regular comparison here
-            return (x < y ? -1 : (x > y ? 1 : 0)) * (this.sortType === 'desc' ? -1 : 1);
-          })
-        }
-
-        // if the filtering is event based, we need to maintain filter
-        // rows
-        if (this.searchTrigger == 'enter') {
-          this.filteredRows = computedRows;
-        }
-
-        return computedRows;
-      },
-
-      paginated() {
-        var paginatedRows = this.processedRows;
-
-        if (this.paginate) {
-          var pageStart = (this.currentPage - 1) * this.currentPerPage;
-
-          // in case of filtering we might be on a page that is
-          // not relevant anymore
-          // also, if setting to all, current page will not be valid
-          if (pageStart >= this.processedRows.length
-            || this.currentPerPage == -1) {
-            this.currentPage = 1;
-            pageStart = 0;
-          }
-
-          //calculate page end now
-          var pageEnd = paginatedRows.length + 1;
-
-          //if the setting is set to 'all'
-          if (this.currentPerPage != -1) {
-            pageEnd = this.currentPage * this.currentPerPage;
-          }
-
-          paginatedRows = paginatedRows.slice(pageStart, pageEnd);
-        }
-        return paginatedRows;
-      },
-
-      paginatedInfo() {
-        var infoStr = '';
-        infoStr += (this.currentPage - 1) * this.currentPerPage ? (this.currentPage - 1) * this.currentPerPage : 1;
-        infoStr += ' - ';
-        infoStr += Math.min(this.processedRows.length, this.currentPerPage * this.currentPage);
-        infoStr += ' ' + this.ofText + ' ';
-        infoStr += this.processedRows.length;
-        if(this.currentPerPage == -1){
-          return '1 - ' + this.processedRows.length + ' ' + this.ofText + ' ' + this.processedRows.length;
-        }
-        return infoStr;
-      },
-    },
-
-    mounted() {
-      this.filteredRows = JSON.parse(JSON.stringify(this.rows));
-
-      // we need to preserve the original index of rows so lets do that
-      for(const [index, row] of this.filteredRows.entries()) {
-        row.originalIndex = index;
+    collectFormatted (obj, column) {
+      // helper functions within collect
+      function formatDecimal (v) {
+        return parseFloat(Math.round(v * 100) / 100).toFixed(2)
       }
 
+      function formatPercent (v) {
+        return parseFloat(v * 100).toFixed(2) + '%'
+      }
+
+      function formatDate (v) {
+        // convert to date
+        return format(parse(v, column.inputFormat, new Date()), column.outputFormat)
+      }
+
+      var value = this.collect(obj, column.field)
+
+      if (value === undefined) return ''
+      // lets format the resultant data
+      switch (column.type) {
+        case 'decimal':
+          return formatDecimal(value)
+        case 'percentage':
+          return formatPercent(value)
+        case 'date':
+          return formatDate(value)
+        default:
+          return value
+      }
+    },
+
+    formattedRow (row) {
+      var formattedRow = {}
+      for (const col of this.columns) {
+        if (col.field) {
+          formattedRow[col.field] = this.collectFormatted(row, col)
+        }
+      }
+      return formattedRow
+    },
+
+    // Get the necessary style-classes for the given column
+    // --------------------------------------------------------
+    columnHeaderClass (column, index) {
+      var classString = ''
+      if (this.sortable) {
+        classString += 'sorting '
+      }
+      if (index === this.sortColumn) {
+        if (this.sortType === 'desc') {
+          classString += 'sorting-desc '
+        } else {
+          classString += 'sorting-asc '
+        }
+      }
+      classString += this.getDataStyle(index, 'th')
+      return classString
+    },
+    // given column index, we can figure out what style classes
+    // to apply to this data
+    // ---------------------------------------------------------
+    getDataStyle (index, type) {
+      var classString = ''
+      switch (this.columns[index].type) {
+        case 'number':
+        case 'percentage':
+        case 'decimal':
+        case 'date':
+        case 'text':
+          classString += 'right-align '
+          break
+        default:
+          classString += 'left-align '
+      }
+      if (typeof type !== 'undefined' && this.columns[index].hasOwnProperty(type + 'Class')) {
+        classString += ' '
+        classString = this.columns[index][type + 'Class']
+      }
+      return classString
+    },
+
+    // since vue doesn't detect property addition and deletion, we
+    // need to create helper function to set property etc
+    updateFilters (column, value) {
+      const _this = this
+      if (this.timer) clearTimeout(this.timer)
+      this.timer = setTimeout(function () {
+        _this.$set(_this.columnFilters, column.field, value)
+      }, 400)
+    },
+
+    // method to filter rows
+    filterRows () {
+      var computedRows = JSON.parse(JSON.stringify(this.rows))
+      if (this.hasFilterRow) {
+        for (var col of this.columns) {
+          if (col.filterable && this.columnFilters[col.field]) {
+            computedRows = computedRows.filter(row => {
+              // If column has a custom filter, use that.
+
+              if (col.filter) {
+                return col.filter(this.collect(row, col.field), this.columnFilters[col.field])
+              }
+
+              // Use default filters
+
+              switch (col.type) {
+                case 'number':
+                case 'percentage':
+                case 'decimal':
+                  // in case of numeric value we need to do an exact
+                  // match for now`
+                  return this.collect(row, col.field) === this.columnFilters[col.field]
+                default:
+                  // text value lets test starts with
+                  return this.collect(row, col.field)
+                    .toLowerCase()
+                    .startsWith(
+                      (this.columnFilters[col.field]).toLowerCase()
+                    )
+              }
+            })
+          }
+        }
+      }
+      this.filteredRows = computedRows
+    },
+
+    // get column's defined placeholder or default one
+    getPlaceholder (column) {
+      const placeholder = column.placeholder || 'Filter ' + column.label
+      return placeholder
+    },
+
+    getCurrentIndex (index) {
+      return (this.currentPage - 1) * this.currentPerPage + index + 1
+    }
+  },
+
+  watch: {
+    columnFilters: {
+      handler: function (newObj) {
+        this.filterRows()
+      },
+      deep: true
+    },
+    rows: {
+      handler: function (newObj) {
+        this.filterRows()
+      },
+      deep: true
+    },
+    perPage () {
       if (this.perPage) {
-        this.currentPerPage = this.perPage;
+        this.currentPerPage = this.perPage
+      } else {
+        // reset to default
+        this.currentPerPage = 10
+      }
+    }
+
+  },
+
+  computed: {
+
+    searchTerm () {
+      return (this.externalSearchQuery != null) ? this.externalSearchQuery : this.globalSearchTerm
+    },
+
+    //
+    globalSearchAllowed () {
+      if (this.globalSearch && !!this.globalSearchTerm && this.searchTrigger !== 'enter') {
+        return true
       }
 
-      //take care of default sort on mount
-      if (this.defaultSortBy) {
-        for (let [index, col] of this.columns.entries()) {
-          if (col.field === this.defaultSortBy.field) {
-            this.sortColumn = index;
-            this.sortType = this.defaultSortBy.type || 'asc';
-            this.sortChanged = true;
-            break;
+      if (this.externalSearchQuery != null && this.searchTrigger !== 'enter') {
+        return true
+      }
+
+      if (this.forceSearch) {
+        this.forceSearch = false
+        return true
+      }
+
+      return false
+    },
+
+    // to create a filter row, we need to
+    // make sure that there is atleast 1 column
+    // that requires filtering
+    hasFilterRow () {
+      if (!this.globalSearch) {
+        for (var col of this.columns) {
+          if (col.filterable) {
+            return true
           }
+        }
+      }
+      return false
+    },
+
+    // this is done everytime sortColumn
+    // or sort type changes
+    // ----------------------------------------
+    processedRows () {
+      var computedRows = this.filteredRows
+
+      // take care of the global filter here also
+      if (this.globalSearchAllowed) {
+        var filteredRows = []
+        for (var row of this.rows) {
+          for (var col of this.columns) {
+            if (String(this.collectFormatted(row, col)).toLowerCase()
+                .search(this.searchTerm.toLowerCase()) > -1) {
+              filteredRows.push(row)
+              break
+            }
+          }
+        }
+        computedRows = filteredRows
+      }
+
+      // taking care of sort here only if sort has changed
+      if (this.sortable !== false && this.sortColumn !== -1 &&
+
+        // if search trigger is enter then we only sort
+        // when enter is hit
+        (this.searchTrigger !== 'enter' || this.sortChanged)) {
+        this.sortChanged = false
+
+        computedRows = computedRows.sort((x, y) => {
+          if (!this.columns[this.sortColumn]) {
+            return 0
+          }
+
+          const cook = (d) => {
+            d = this.collect(d, this.columns[this.sortColumn].field)
+
+            // take care of dates too.
+            if (this.columns[this.sortColumn].type === 'date') {
+              d = parse(d + '', this.columns[this.sortColumn].inputFormat, new Date())
+            } else if (typeof d === 'string') {
+              d = d.toLowerCase()
+              if (this.columns[this.sortColumn].type === 'number') {
+                d = d.indexOf('.') >= 0 ? parseFloat(d) : parseInt(d)
+              }
+            }
+            return d
+          }
+
+          x = cook(x)
+          y = cook(y)
+
+          // date comparison here
+          if (this.columns[this.sortColumn].type === 'date') {
+            return (compareAsc(x, y)) * (this.sortType === 'desc' ? -1 : 1)
+          }
+
+          // regular comparison here
+          return (x < y ? -1 : (x > y ? 1 : 0)) * (this.sortType === 'desc' ? -1 : 1)
+        })
+      }
+
+      // if the filtering is event based, we need to maintain filter
+      // rows
+      if (this.searchTrigger === 'enter') {
+        this.filteredRows = computedRows
+      }
+
+      return computedRows
+    },
+
+    paginated () {
+      var paginatedRows = this.processedRows
+
+      if (this.paginate) {
+        var pageStart = (this.currentPage - 1) * this.currentPerPage
+
+        // in case of filtering we might be on a page that is
+        // not relevant anymore
+        // also, if setting to all, current page will not be valid
+        if (pageStart >= this.processedRows.length || this.currentPerPage === -1) {
+          this.currentPage = 1
+          pageStart = 0
+        }
+
+        // calculate page end now
+        var pageEnd = paginatedRows.length + 1
+
+        // if the setting is set to 'all'
+        if (this.currentPerPage !== -1) {
+          pageEnd = this.currentPage * this.currentPerPage
+        }
+
+        paginatedRows = paginatedRows.slice(pageStart, pageEnd)
+      }
+      return paginatedRows
+    },
+
+    paginatedInfo () {
+      var infoStr = ''
+      infoStr += (this.currentPage - 1) * this.currentPerPage ? (this.currentPage - 1) * this.currentPerPage : 1
+      infoStr += ' - '
+      infoStr += Math.min(this.processedRows.length, this.currentPerPage * this.currentPage)
+      infoStr += ' ' + this.ofText + ' '
+      infoStr += this.processedRows.length
+      if (this.currentPerPage === -1) {
+        return '1 - ' + this.processedRows.length + ' ' + this.ofText + ' ' + this.processedRows.length
+      }
+      return infoStr
+    }
+  },
+
+  mounted () {
+    this.filteredRows = JSON.parse(JSON.stringify(this.rows))
+
+    // we need to preserve the original index of rows so lets do that
+    for (const [index, row] of this.filteredRows.entries()) {
+      row.originalIndex = index
+    }
+
+    if (this.perPage) {
+      this.currentPerPage = this.perPage
+    }
+
+    // take care of default sort on mount
+    if (this.defaultSortBy) {
+      for (let [index, col] of this.columns.entries()) {
+        if (col.field === this.defaultSortBy.field) {
+          this.sortColumn = index
+          this.sortType = this.defaultSortBy.type || 'asc'
+          this.sortChanged = true
+          break
         }
       }
     }
   }
+}
 </script>
 
 <style lang="css" scoped>
